@@ -1,7 +1,5 @@
-from string import Template
+from random import sample
 from sys import exit
-from pprint import pprint
-from copy import copy
 
 def isInt(x):
     try:
@@ -16,13 +14,89 @@ class State:
     # (b) a list of places X has gone
     # (c) a list of places O has gone
     # (d) the current player
-    def __init__(self, nDim, xes, oes, player):
+    # flag if the x player is AI
+    # flag if the o player is AI
+    def __init__(self, nDim, xes, oes, player, xai, oai):
         self.nDim = nDim
         self.xes = xes
         self.oes = oes
         self.player = player
+        self.xAI = xai
+        self.oAI = oai
+        self.remainingMoves = (3**self.nDim) - (len(self.xes) + len(self.oes))
 
-# Impure IO functions below
+# Impure functions below
+
+# Determines what the AI does
+# relies on randomness, so is impure
+def getAImove(state):
+    # Currently implementing a standard (dumb) look ahead AI
+    def buildPossibleMoves(state,curDimTrace):
+        if len(curDimTrace) == state.nDim - 1:
+            output = {}
+            for i in range(3):
+                newDim = [i] + curDimTrace
+                if newDim in state.xes or newDim in state.oes:
+                    continue
+                else:
+                    if state.player == 'X':
+                        newState = State(state.nDim,
+                                         [*state.xes,newDim],
+                                         state.oes,
+                                         'O', state.xAI, state.oAI)
+                    else:
+                        newState = State(state.nDim,
+                                         state.xes,
+                                         [*state.oes,newDim],
+                                         'X', state.xAI, state.oAI)
+                    output[(tuple(newDim), newState)] = {}
+        else:
+            output1 = buildPossibleMoves(state, [0] + curDimTrace)
+            output2 = buildPossibleMoves(state, [1] + curDimTrace)
+            output3 = buildPossibleMoves(state, [2] + curDimTrace)
+            output = {**output1, **output2, **output3}
+        return output
+    def updateScores(scores,choice,scoreType,newScore):
+        try:
+            scores[choice][scoreType] += newScore
+        except:
+            try:
+                scores[choice][scoreType] = newScore
+            except:
+                scores[choice] = {}
+                scores[choice][scoreType] = newScore
+        return scores
+    # Let's start 3 levels deep
+    choices = buildPossibleMoves(state,[])
+    scores = {}
+    for choice in choices:
+        if state.remainingMoves >= 2:
+            choices[choice] = buildPossibleMoves(choice[1],[])
+            for choice2 in choices[choice]:
+                if state.remainingMoves >= 3:
+                    choices[choice][choice2] = buildPossibleMoves(choice2[1],[])
+                    for choice3 in choices[choice][choice2]:
+                        newScores = getScores(choice3[1])
+                        scores = updateScores(scores,choice,'XScore',newScores[0])
+                        scores = updateScores(scores,choice,'OScore',newScores[0])
+                else:
+                    newScores = getScores(choice2[1])
+                    scores = updateScores(scores,choice,'XScore',newScores[0])
+                    scores = updateScores(scores,choice,'OScore',newScores[0])
+        else:
+            newScores = getScores(choice[1])
+            scores = updateScores(scores,choice,'XScore',newScores[0])
+            scores = updateScores(scores,choice,'OScore',newScores[0])
+
+    for choice in scores:
+        if state.player == 'X':
+            scores[choice] = scores[choice]['XScore'] - scores[choice]['OScore']
+        else:
+            scores[choice] = scores[choice]['OScore'] - scores[choice]['XScore']
+    best_choices = [list(x[0]) for x in scores 
+                    if scores[x] == max(scores.values())]
+    return sample(best_choices,1)[0]
+
 # Update the screen with the current state
 def printStateToScreen(state):
     def generateGrid(state,curDimTrace):
@@ -78,7 +152,7 @@ def printStateToScreen(state):
     print(generateGrid(state,[]))
 
 # Get the next player's move
-def getNextPlayerMove(state, player):
+def getNextPlayerMove(state):
     def isValidMove(state,x):
         if x == '':
             return False
@@ -102,59 +176,103 @@ def getNextPlayerMove(state, player):
     move = ''
     while not isValidMove(state, move):
         move = input('Where would you like to go Player ' +
-                     player +
+                     state.player +
                      ' (give your move with 0,1,2 separated by commas)?\n')
     return [int(y) for y in move.split(',')]
 
 # Figure out how many dimensions to use for the new game
-def getNewGameDim():
+def getNewGame():
     gameDim = ''
     while not isInt(gameDim):
-        gameDim = input('How many dimensions will your next game be (q to quit)?\n').rstrip()
+        gameDim = input('How many dimensions will your next game be (q to quit)?\n').rstrip().lower()
         if gameDim == 'q':
             exit()
-    return int(gameDim)
+    gameDim = int(gameDim)
+    xAI = ''
+    while not isinstance(xAI, bool):
+        xAI = input('Is X player an AI (y, n, q to quit)?\n').rstrip().lower()
+        if xAI == 'q':
+            exit()
+        elif xAI == 'y':
+            xAI = True
+        elif xAI == 'n':
+            xAI = False
+    oAI = ''
+    while not isinstance(oAI, bool):
+        oAI = input('Is O player an AI (y, n, q to quit)?\n').rstrip().lower()
+        if oAI == 'q':
+            exit()
+        elif oAI == 'y':
+            oAI = True
+        elif oAI == 'n':
+            oAI = False
+    return gameDim, xAI, oAI
 
 # Pure functions remain
-
-# We need a function to evaluate whether or not someone has won
-def hasVictor(state):
+def getScores(state):
     xcount = 0
     used_points = []
     for x1 in state.xes:
-        for x2 in state.xes:
-            for x3 in state.xes:
-                if ((x1 != x2) and
-                    (x1 != x3) and
-                    (x2 != x3) and
-                    (x1 not in used_points) and
-                    (x2 not in used_points) and
-                    (x3 not in used_points) and
-                    False not in [(x1[i] == 0 and x2[i] == 1 and x3[i] == 2) or
-                                  (x1[i] == x2[i] == x3[i])
-                                  for i in range(state.nDim)]):
-                    xcount += 1
-                    used_points.append(x1)
-                    used_points.append(x2)
-                    used_points.append(x3)
+        if x1 not in used_points and (0 in x1 or 2 in x1):
+            for x2 in state.xes:
+                if (x2 not in used_points and
+                    x2 != x1 and
+                    1 in x2):
+                    for x3 in state.xes:
+                        if ((x3 not in used_points) and
+                             x1 != x3 and
+                             x2 != x3 and
+                             (2 in x3 or 0 in x3) and
+                             False not in [(x1[j] == 0 and
+                                            x2[j] == 1 and
+                                            x3[j] == 2) or
+                                           (x1[j] == 2 and
+                                            x2[j] == 1 and
+                                            x3[j] == 0) or
+                                            (x1[j] == x2[j] == x3[j])
+                                            for j in range(state.nDim)]):
+                            print(x1)
+                            print(x2)
+                            print(x3)
+                            print('\n')
+                            xcount += 1
+                            used_points.append(x1)
+                            used_points.append(x2)
+                            used_points.append(x3)
 
     ocount = 0
+    used_points = []
     for o1 in state.oes:
-        for o2 in state.oes:
-            for o3 in state.oes:
-                if ((o1 != o2) and
-                    (o1 != o3) and
-                    (o2 != o3) and
-                    (o1 not in used_points) and
-                    (o2 not in used_points) and
-                    (o3 not in used_points) and
-                    False not in [(o1[i] == 0 and o2[i] == 1 and o3[i] == 2) or
-                                  (o1[i] == o2[i] == o3[i])
-                                  for i in range(state.nDim)]):
-                    ocount += 1
-                    used_points.append(o1)
-                    used_points.append(o2)
-                    used_points.append(o3)
+        if o1 not in used_points and 0 in o1:
+            for o2 in state.oes:
+                if (o2 not in used_points and
+                    o2 != o1 and
+                    1 in o2):
+                    for o3 in state.oes:
+                        if ((o3 not in used_points) and
+                             o3 != o1 and
+                             o3 != o2 and
+                             2 in o3 and
+                             False not in [(o1[j] == 0 and
+                                            o2[j] == 1 and
+                                            o3[j] == 2) or
+                                           (o1[j] == 2 and
+                                            o2[j] == 1 and
+                                            o3[j] == 0) or
+                                            (o1[j] == o2[j] == o3[j])
+                                            for j in range(state.nDim)]):
+                            print(o1)
+                            print(o2)
+                            print(o3)
+                            ocount += 1
+                            used_points.append(o1)
+                            used_points.append(o2)
+                            used_points.append(o3)
+    return xcount, ocount
+
+# We need a function to evaluate whether or not someone has won
+def hasVictor(state):
+    xcount, ocount = getScores(state)
     if xcount >= state.nDim - 1:
         print('X just won the game!!!')
         return True
@@ -162,6 +280,9 @@ def hasVictor(state):
         print('O just won the game!!!')
         return True
     else:
+        if state.remainingMoves == 0:
+            print('The game is a tie!!!')
+            return True
         print('X has ' + str(xcount) + ' lines; ' + 
               str((state.nDim - 1) - xcount) + ' more to win.')
         print('O has ' + str(ocount) + ' lines; ' + 
@@ -171,20 +292,32 @@ def hasVictor(state):
 # Actually, run the game
 if __name__ == "__main__":
     while True:
-        newDim = getNewGameDim()
-        state = State(newDim,[],[],'X')
+        newRules = getNewGame()
+        state = State(newRules[0],[],[],'X',newRules[1],newRules[2])
         printStateToScreen(state)
         while not hasVictor(state):
-            newMove = getNextPlayerMove(state,state.player)
             if state.player == 'X':
+                if state.xAI:
+                    newMove = getAImove(state)
+                else:
+                    newMove = getNextPlayerMove(state)
                 state = State(state.nDim,
                               state.xes+[newMove],
                               state.oes,
-                              'O')
+                              'O',
+                              state.xAI,
+                              state.oAI)
             else:
+                if state.oAI:
+                    newMove = getAImove(state)
+                else:
+                    newMove = getNextPlayerMove(state)
                 state = State(state.nDim,
                               state.xes,
                               state.oes+[newMove],
-                              'X')
+                              'X',
+                              state.xAI,
+                              state.oAI)
             printStateToScreen(state)
+            print(state.__dict__)
 
