@@ -75,36 +75,40 @@ class State:
     def has_victor(self):
         """A function to evaluate whether or not someone has won"""
         xcount, ocount = self.get_scores()
+        printstr = 'ERROR!!!'
+        output = False
         if xcount >= self.ndim - 1:
-            print('X just won the game!!!')
-            return True
+            printstr = 'X just won the game!!!'
+            output = True
         elif ocount >= self.ndim - 1:
-            print('O just won the game!!!')
-            return True
+            printstr = 'O just won the game!!!'
+            output = True
         else:
             if self.remaining_moves == 0:
-                print('The game is a tie!!!')
-                return True
-            print('X has ' + str(xcount) + ' lines; ' +
-                  str((self.ndim - 1) - xcount) + ' more to win.')
-            print('O has ' + str(ocount) + ' lines; ' +
-                  str((self.ndim - 1) - ocount) + ' more to win.')
-            return False
+                printstr = 'The game is a tie!!!'
+                output = True
+            printstr = ('X has ' + str(xcount) + ' lines; ' + str((self.ndim -
+                                                                   1) - xcount)
+                        + ' more to win.')
+            printstr += ('O has ' + str(ocount) + ' lines; ' +
+                         str((self.ndim - 1) - ocount) + ' more to win.')
+            output = False
+        return printstr, output
 
     def generate_grid(self, curdimtrace):
         '''state = gameState
-           curDimTrace is a identifying the current dimension
+           curdimtrace is a identifying the current dimension
            Actually, create a row if you are at the first dimension'''
         if len(curdimtrace) == self.ndim - 1:
             newrow = ''
             for i in range(3):
                 if [i]+curdimtrace in self.xes:
-                    newrow += 'X|'
+                    newrow += "X|"
                 elif [i]+curdimtrace in self.oes:
-                    newrow += 'O|'
+                    newrow += "O|"
                 else:
-                    newrow += ' |'
-            myoutput = newrow.rstrip('|')
+                    newrow += " |"
+            myoutput = newrow.rstrip("|")
         # We're going to be manipulating inherited material from recursive
         # calls
         else:
@@ -128,9 +132,9 @@ class State:
                 output2 = [y for x in output2 for y in x.split('\n')]
                 output3 = [y for x in output3 for y in x.split('\n')]
                 for k, out1str in enumerate(output1):
-                    myoutput.append(out1str + ' ! ' +
-                                    output2[k] + ' ! ' +
-                                    output3[k] + ' ! ')
+                    myoutput.append(out1str + ' ' +
+                                    output2[k] + ' ' +
+                                    output3[k] + ' ')
             # We're at an even dimension (extend the game board vertically)
             else:
                 myoutput.append('\n'.join(output1)+'\n')
@@ -139,9 +143,13 @@ class State:
             # This is the final dimension (join everything with new lines
             # and send off for printing)
             if curdimtrace == []:
-                myoutput = '\n'.join([x.rstrip('! ') for x in myoutput])
+                myoutput = '\n'.join([x.rstrip(' ') for x in myoutput])
         return myoutput
 
-    def print_to_screen(self):
+    def print_to_screen(self, gui):
         """Prints the state to the screen"""
-        print(self.generate_grid([]))
+        gui['gamepad'].addstr(0, 0, self.generate_grid([]))
+        gui['gamepad'].move(0, 0)
+        gui['gamepad'].refresh(0, 0,
+                               0, 0,
+                               gui['mainheight'], gui['mainwidth'])

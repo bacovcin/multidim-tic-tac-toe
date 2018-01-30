@@ -3,7 +3,7 @@ from random import sample
 from state import State
 
 
-def get_ai_move(state):
+def dumb_lookahead(state):
     """ Currently implementing a standard (dumb) look ahead AI """
     def build_possible_moves(state, curdimtrace):
         """Figure out where possible moves are"""
