@@ -1,6 +1,7 @@
 """Python code to implement multidimensional tic-tac-toe"""
 import curses
-from ai import dumb_lookahead as get_ai_move
+import torch
+from ai import deep_learning_ai
 from state import State
 
 
@@ -58,7 +59,7 @@ def get_new_game(gui):
     """Initializes a game"""
     def get_ai(player):
         """Gets an AI value"""
-        querystr = 'Is ' + player + ' player an AI (y, n, q to quit)?\n'
+        querystr = 'Is ' + player + ' player an AI (y, n, l, q to quit)?\n'
         gui['inputbar'].clear()
         gui['inputbar'].addstr(querystr)
         gui['inputbar'].refresh()
@@ -66,11 +67,29 @@ def get_new_game(gui):
             nextchr = gui['inputbar'].getkey()
             if nextchr == 'q':
                 exit()
+            elif nextchr == 'l':
+                output = 2
+                break
             elif nextchr == 'y':
-                return True
+                output = 1
+                break
             elif nextchr == 'n':
-                return False
-        return False
+                output = 0
+                break
+        if output in (1, 2):
+            querystr = 'Which type of AI (1, 2, q to quit)?\n'
+            gui['inputbar'].clear()
+            gui['inputbar'].addstr(querystr)
+            gui['inputbar'].refresh()
+            while True:
+                nextchr = gui['inputbar'].getkey()
+                if nextchr == 'q':
+                    exit()
+                elif nextchr == '2':
+                    return (output, 2)
+                elif nextchr == '1':
+                    return (output, 1)
+        return (0, 0)
     querystr = 'How many dimensions will your next game be (q to quit)?\n'
     gui['inputbar'].clear()
     gui['inputbar'].addstr(querystr)
@@ -94,8 +113,44 @@ def get_new_game(gui):
         gui['inputbar'].refresh()
     gamedim = int(gamedim)
     xai = get_ai('X')
-    oai = get_ai('O')
-    return (gamedim, xai, oai), gui
+    if xai[0] in (0, 1):
+        learning = False
+        if xai == 0:
+            xai = False
+        else:
+            xai = deep_learning_ai(rnn_type=xai[1])
+        oai = get_ai('O')
+        if oai == 0:
+            oai = False
+        else:
+            xai = deep_learning_ai(rnn_type=xai[1])
+    else:
+        learning = True
+        xai = deep_learning_ai(rnn_type=xai[1])
+        oai = deep_learning_ai(rnn_type=xai[1])
+    querystr = 'How many games with these rules (q to quit)?\n'
+    gui['inputbar'].clear()
+    gui['inputbar'].addstr(querystr)
+    gui['inputbar'].refresh()
+    curstr = ''
+    ngames = ''
+    while not is_int(ngames):
+        nextchr = gui['inputbar'].getkey()
+        if nextchr in ('\n', '\r', curses.KEY_ENTER):
+            ngames = curstr
+        elif nextchr == 'q':
+            exit()
+        elif nextchr in ['1', '2', '3', '4', '5',
+                         '6', '7', '8', '9', '0']:
+            curstr += nextchr
+        elif nextchr in ['\b', '\x7f',
+                         curses.KEY_DC, curses.KEY_BACKSPACE]:
+            curstr = curstr[:-1]
+        gui['inputbar'].clear()
+        gui['inputbar'].addstr(querystr+curstr)
+        gui['inputbar'].refresh()
+    ngames = int(ngames)
+    return (gamedim, xai, oai, learning), gui, ngames
 
 
 def create_windows(stdscr):
@@ -167,68 +222,114 @@ def take_move(state, gui):
     """Get the next move"""
     if state.player == 'X':
         if state.xai:
-            newmove = get_ai_move(state)
+            if state.learning_mode:
+                newmove = state.xai.choose_move(state, greedye=0.5)
+            else:
+                newmove = state.xai.choose_move(state, greedye=0.01)
+
         else:
             newmove = get_next_player_move(state, gui)
         state = State(state.ndim,
                       (state.xes+[newmove], state.oes),
                       'O',
-                      (state.xai, state.oai))
+                      (state.xai, state.oai),
+                      state.learning_mode)
     else:
         if state.oai:
-            newmove = get_ai_move(state)
+            if state.learning_mode:
+                newmove = state.oai.choose_move(state, greedye=0.5)
+            else:
+                newmove = state.oai.choose_move(state, greedye=0.01)
         else:
             newmove = get_next_player_move(state, gui)
         state = State(state.ndim,
                       (state.xes, state.oes+[newmove]),
                       'X',
-                      (state.xai, state.oai))
+                      (state.xai, state.oai),
+                      state.learning_mode)
     state.print_to_screen(gui)
     return state
 
 
-def display_input(instring, gui):
+def display_input(instring, gui, learning_mode):
     """Display message in input bar and wait for return to continue"""
     gui['inputbar'].clear()
     gui['inputbar'].addstr(instring + '\nPress ENTER to take next move' +
                            '("q" to quit). You will not be able to move ' +
                            'around board while taking your move...')
     gui['inputbar'].refresh()
-    nextchr = ''
-    while nextchr not in ('\n', '\r', curses.KEY_ENTER):
-        nextchr = gui['inputbar'].getkey()
-        if nextchr in (curses.ACS_LARROW,
-                       curses.ACS_RARROW,
-                       curses.ACS_UARROW,
-                       curses.ACS_DARROW, 'B', 'C', 'D', 'A'):
-            gui = move_main_window(gui, nextchr)
-        elif nextchr == 'q':
-            exit()
-        gui = move_main_window(gui, '')
+    if not learning_mode:
+        nextchr = ''
+        while nextchr not in ('\n', '\r', curses.KEY_ENTER):
+            nextchr = gui['inputbar'].getkey()
+            if nextchr in (curses.ACS_LARROW,
+                           curses.ACS_RARROW,
+                           curses.ACS_UARROW,
+                           curses.ACS_DARROW, 'B', 'C', 'D', 'A'):
+                gui = move_main_window(gui, nextchr)
+            elif nextchr == 'q':
+                exit()
+            gui = move_main_window(gui, '')
     return gui
 
 
 def next_move(state, gui, printstr):
     """Manipulate the GUI between moves"""
-    gui = display_input(printstr, gui)
+    gui = display_input(printstr, gui, state.learning_mode)
     return take_move(state, gui)
 
 
 def main(stdscr):
     """Actually run the game"""
     gui = create_windows(stdscr)
+    newrules, gui, ngames = get_new_game(gui)
     while True:
         # Clear screen
-        newrules, gui = get_new_game(gui)
+        if ngames == 0:
+            newrules, gui, ngames = get_new_game(gui)
         state = State(newrules[0],
                       ([], []),
                       'X',
-                      (newrules[1], newrules[2]))
+                      (newrules[1], newrules[2]),
+                      newrules[3])
+        state.learning_mode = newrules[3]
         state.print_to_screen(gui)
         while True:
             printstr, victor = state.has_victor()
             if victor:
-                gui = display_input(printstr, gui)
+                xscore, oscore = state.get_scores()
+                if state.xai:
+                    if xscore > oscore:
+                        state.xai.learning(state.xai.previous_moves, 5,
+                                           state.ndim)
+                    elif xscore < oscore:
+                        state.xai.learning(state.xai.previous_moves, -10,
+                                           state.ndim)
+                if state.oai:
+                    if oscore > xscore:
+                        state.oai.learning(state.oai.previous_moves, 5,
+                                           state.ndim)
+                    elif xscore < xscore:
+                        state.oai.learning(state.oai.previous_moves, -10,
+                                           state.ndim)
+                if state.xai and state.oai:
+                    xrnn = state.xai.my_rnn
+                    ornn = state.oai.my_rnn
+                    xpars = list(xrnn.parameters())
+                    opars = list(ornn.parameters())
+                    for i in range(len(xpars)):
+                        xparameter = xpars[i]
+                        oparameter = opars[i]
+                        newdata = (xparameter.data + oparameter.data) / 2
+                        xpars[i].data = newdata
+                    torch.save(xrnn.state_dict(), 'deepmodel.dic')
+                elif state.xai:
+                    torch.save(state.xai.my_rnn.state_dict(), 'deepmodel.dic')
+                elif state.oai:
+                    torch.save(state.oai.my_rnn.state_dict(), 'deepmodel.dic')
+
+                gui = display_input(printstr, gui, state.learning_mode)
+                ngames -= 1
                 break
             state = next_move(state, gui, printstr)
 

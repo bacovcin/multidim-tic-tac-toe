@@ -12,7 +12,7 @@ class State:
      flag if the x player is AI
      flag if the o player is AI
     """
-    def __init__(self, ndim, places, player, aistatus):
+    def __init__(self, ndim, places, player, aistatus, learning_mode=False):
         """Creates an initial state"""
         self.ndim = ndim
         self.xes = places[0]
@@ -20,6 +20,7 @@ class State:
         self.player = player
         self.xai = aistatus[0]
         self.oai = aistatus[1]
+        self.learning_mode = learning_mode
         self.remaining_moves = (3**self.ndim) - (len(self.xes) + len(self.oes))
 
     def get_scores(self):
@@ -83,10 +84,10 @@ class State:
         elif ocount >= self.ndim - 1:
             printstr = 'O just won the game!!!'
             output = True
+        elif self.remaining_moves == 0:
+            printstr = 'The game is a tie!!!'
+            output = True
         else:
-            if self.remaining_moves == 0:
-                printstr = 'The game is a tie!!!'
-                output = True
             printstr = ('X has ' + str(xcount) + ' lines; ' + str((self.ndim -
                                                                    1) - xcount)
                         + ' more to win.')
