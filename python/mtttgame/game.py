@@ -115,6 +115,7 @@ def get_new_game(gui):
     xai = get_ai('X')
     if xai[0] in (0, 1):
         learning = False
+        rnn_type = xai[1]
         if xai == 0:
             xai = False
         else:
@@ -123,11 +124,12 @@ def get_new_game(gui):
         if oai == 0:
             oai = False
         else:
-            xai = deep_learning_ai(rnn_type=xai[1])
+            oai = deep_learning_ai(rnn_type=oai[1])
     else:
         learning = True
-        xai = deep_learning_ai(rnn_type=xai[1])
-        oai = deep_learning_ai(rnn_type=xai[1])
+        rnn_type = xai[1]
+        xai = deep_learning_ai(rnn_type=rnn_type)
+        oai = deep_learning_ai(rnn_type=rnn_type)
     querystr = 'How many games with these rules (q to quit)?\n'
     gui['inputbar'].clear()
     gui['inputbar'].addstr(querystr)
@@ -315,18 +317,39 @@ def main(stdscr):
                 if state.xai and state.oai:
                     xrnn = state.xai.my_rnn
                     ornn = state.oai.my_rnn
-                    xpars = list(xrnn.parameters())
-                    opars = list(ornn.parameters())
-                    for i in range(len(xpars)):
-                        xparameter = xpars[i]
-                        oparameter = opars[i]
-                        newdata = (xparameter.data + oparameter.data) / 2
-                        xpars[i].data = newdata
-                    torch.save(xrnn.state_dict(), 'deepmodel.dic')
+                    if state.xai.rnn_type == state.oai.rnn_type:
+                        xpars = list(xrnn.parameters())
+                        opars = list(ornn.parameters())
+                        for i in range(len(xpars)):
+                            xparameter = xpars[i]
+                            oparameter = opars[i]
+                            newdata = (xparameter.data + oparameter.data) / 2
+                            xpars[i].data = newdata
+                        if state.xai.rnn_type == 1:
+                            torch.save(xrnn.state_dict(), 'deepmodel.dic')
+                        elif state.xai.rnn_type == 2:
+                            torch.save(xrnn.state_dict(), 'deepmodel2.dic')
+                    else:
+                        if state.xai.rnn_type == 1:
+                            torch.save(xrnn.state_dict(), 'deepmodel.dic')
+                        elif state.xai.rnn_type == 2:
+                            torch.save(xrnn.state_dict(), 'deepmodel2.dic')
+                        if state.oai.rnn_type == 1:
+                            torch.save(ornn.state_dict(), 'deepmodel.dic')
+                        elif state.oai.rnn_type == 2:
+                            torch.save(ornn.state_dict(), 'deepmodel2.dic')
                 elif state.xai:
-                    torch.save(state.xai.my_rnn.state_dict(), 'deepmodel.dic')
+                    xrnn = state.xai.my_rnn
+                    if state.xai.rnn_type == 1:
+                        torch.save(xrnn.state_dict(), 'deepmodel.dic')
+                    elif state.xai.rnn_type == 2:
+                        torch.save(xrnn.state_dict(), 'deepmodel2.dic')
                 elif state.oai:
-                    torch.save(state.oai.my_rnn.state_dict(), 'deepmodel.dic')
+                    ornn = state.oai.my_rnn
+                    if state.oai.rnn_type == 1:
+                        torch.save(ornn.state_dict(), 'deepmodel.dic')
+                    elif state.oai.rnn_type == 2:
+                        torch.save(ornn.state_dict(), 'deepmodel2.dic')
 
                 gui = display_input(printstr, gui, state.learning_mode)
                 ngames -= 1
