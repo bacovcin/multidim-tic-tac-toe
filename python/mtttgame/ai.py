@@ -119,9 +119,9 @@ class RNN2(nn.Module):
             hidden2s.append(self.h22o(hidden2s[-1]))
             try:
                 outputs[-1] = torch.cat((outputs[-1],
-                                         hidden2s[-1][:,:9]))
+                                         hidden2s[-1][:, :9]), 1)
             except RuntimeError:
-                outputs[-1] = hidden2s[-1][:,:9]
+                outputs[-1] = hidden2s[-1][:, :9]
             hidden2s.append(hidden2s[-1][:,9:])
         return outputs[-1]
 
@@ -179,6 +179,7 @@ class deep_learning_ai():
     """Code for using a deep neural network to generate
        value matrix"""
     def __init__(self, rnn_type=1):
+        self.rnn_type = rnn_type
         if rnn_type == 1:
             try:
                 self.my_rnn = RNN()
@@ -194,7 +195,6 @@ class deep_learning_ai():
                 self.my_rnn = RNN2()
                 self.initial_train()
         self.previous_moves = []
-        self.rnn_type = rnn_type
 
     def get_input_vectors(self, state, curdimtrace):
         """Recursively create input vectors which take the form of a single
@@ -422,8 +422,6 @@ class deep_learning_ai():
         if self.previous_moves:
             self.check_for_reward(state)
         inputs = Variable(self.get_input_vectors(state, []))
-        with open('debug.txt', 'a') as debugfile:
-            debugfile.write(str(inputs) + '\n')
         values = self.get_values(state, inputs)
         values = sorted([tup for tup in values
                          if (tup[0] not in state.xes and
